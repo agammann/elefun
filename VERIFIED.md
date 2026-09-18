@@ -1,5 +1,7 @@
 # Verification
 
+For commands to reproduce these checks, see the [build and test guide](BUILD.md). For downloads and controls, see the [README](README.md).
+
 Built locally with Clang 23.1.1, C11, optimization, and all enabled compiler warnings treated as errors.
 
 | Check | Result |
