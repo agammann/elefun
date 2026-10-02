@@ -6,9 +6,9 @@
 
 Use Windows 10 or 11 on x64, PowerShell, and an x64 Windows C compiler from **LLVM MinGW** or **MinGW GCC**. The compiler needs its Windows headers and libraries. An ordinary Clang installation without the MinGW toolchain is not sufficient for this build script.
 
-The source uses C11 and the Windows Win32, GDI, and WinMM libraries. No external game engine or asset download is required. The published executable was built with Clang 23.1.1 from LLVM MinGW. MinGW GCC is supported by the script but has not been verified in this project.
+The source uses C11 and the Windows Win32, GDI, and WinMM libraries. No external game engine or asset download is required. The included executable was built with Clang 23.1.2 from LLVM MinGW. MinGW GCC is supported by the script but has not been verified in this project.
 
-To use the tested compiler, open the [LLVM MinGW 20260908 release](https://github.com/mstorsjo/llvm-mingw/releases/tag/20260908), download `llvm-mingw-20260908-ucrt-x86_64.zip` from its Assets list, and extract it. Keep the entire toolchain folder together. The compiler is `bin\clang.exe` inside that folder; you do not need to change PATH when using the explicit command below.
+To use the tested compiler, open the [LLVM MinGW 20260922 release](https://github.com/mstorsjo/llvm-mingw/releases/tag/20260922), download `llvm-mingw-20260922-ucrt-x86_64.zip` from its Assets list, and extract it. Keep the entire toolchain folder together. The compiler is `bin\clang.exe` inside that folder; you do not need to change PATH when using the explicit command below.
 
 ## Compile the game
 
@@ -55,7 +55,7 @@ if ($check.ExitCode -ne 0) {
 }
 ```
 
-Expect a `PASS` result and exit code 0. The hidden check exercises actual Windows message handlers for both players, the mouse, pause, focus changes, restart, settings, and sound toggling. It also checks rendered pixels at four window sizes and repeated drawing for GDI resource stability. It does not verify audible speaker output or replace playtesting with two people.
+Expect a `PASS` result and exit code 0. The hidden check exercises actual Windows message handlers for both players, the mouse, pause, focus changes, restart, settings, and sound toggling. It also checks that results survive next-round settings changes, mouse controls work with letterbox margins, rendered pixels match at four window sizes, and repeated drawing preserves GDI resource counts. It does not verify audible speaker output or replace playtesting with two people.
 
 Each run writes `smoke-result.txt` and `smoke-details.txt` in the working directory. Both files and the `build` directory are ignored by Git.
 
