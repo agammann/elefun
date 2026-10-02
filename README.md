@@ -41,7 +41,7 @@ Player one switches to keyboard movement when you use W A S D. Moving the mouse 
 | **G** | Switch between Most butterflies and Golden butterfly |
 | **B** | Cycle Gentle, Breezy, and Gusty |
 
-Mode, rule, and breeze choices can be changed before a round or on the results screen. Switching to another window automatically pauses the game. Return to the game and press **Enter** to resume. Close the window to quit.
+Mode, rule, and breeze choices can be changed before a round or on the results screen. Results-screen choices apply to the next round; the completed round keeps its winner, scores, and players. Press **Enter**, click **PLAY AGAIN**, or press **R** to start with the new choices. Switching to another window automatically pauses the game. Return to the game and press **Enter** to resume. Close the window to quit.
 
 ## Rules and modes
 

@@ -15,6 +15,7 @@ static const COLORREF BG=C(247,244,227),PANEL=C(34,64,60),INK=C(31,63,60),MUTED=
 static const COLORREF COLORS[4]={C(244,162,111),C(127,192,165),C(166,159,215),C(245,203,96)};
 static const COLORREF NET_COLORS[2]={C(42,133,114),C(218,117,88)};
 static Game game;
+static struct { int mode,rule,difficulty; } settings;
 static HDC canvas,frame_dc;
 static HBITMAP bitmap,frame_bitmap;
 static HGDIOBJ old_bitmap,frame_old_bitmap;
@@ -151,10 +152,10 @@ static void render(void) {
     RestoreDC(canvas,saved);
     roundbox(835,143,316,605,28,PANEL);
     label(858,159,270,24,"THE MORE, THE MERRIER",0,C(168,195,172),DT_LEFT);
-    label(858,184,270,26,"Choose your adventure",2,WHITE,DT_LEFT);
-    const char *modes[]={"SOLO","VS CPU","2 PLAYERS"};for(int i=0;i<3;i++) button(i,857+i*92,214,86,41,modes[i],game.mode==i);
-    const char *rules[]={"RULE: MOST BUTTERFLIES","RULE: GOLDEN BUTTERFLY"};button(11,857,277,270,38,rules[game.rule],0);
-    const char *winds[]={"BREEZE: GENTLE","BREEZE: BREEZY","BREEZE: GUSTY"};button(12,857,328,270,38,winds[game.difficulty],0);
+    label(858,184,270,26,game.phase==FINISHED?"Next round settings":"Choose your adventure",2,WHITE,DT_LEFT);
+    const char *modes[]={"SOLO","VS CPU","2 PLAYERS"};for(int i=0;i<3;i++) button(i,857+i*92,214,86,41,modes[i],settings.mode==i);
+    const char *rules[]={"RULE: MOST BUTTERFLIES","RULE: GOLDEN BUTTERFLY"};button(11,857,277,270,38,rules[settings.rule],0);
+    const char *winds[]={"BREEZE: GENTLE","BREEZE: BREEZY","BREEZE: GUSTY"};button(12,857,328,270,38,winds[settings.difficulty],0);
     line(857,385,1127,385,1,C(72,102,85));
     label(857,397,270,22,"IN YOUR NET",0,C(168,195,172),DT_LEFT);
     int count=game_net_count(&game);char buf[96];
@@ -278,13 +279,19 @@ static void init_sounds(void) {
 static void clear_input(void) {
     memset(keys,0,sizeof(keys));memset(tapped,0,sizeof(tapped));mouse_down=mouse_tap=0;
 }
+static void apply_settings(void) {
+    game.mode=settings.mode;game.rule=settings.rule;game.difficulty=settings.difficulty;
+}
+static void start_round(void) {apply_settings();game_start(&game);clear_input();accumulator=0;}
 static void action(int id) {
     int config=game.phase==LOBBY || game.phase==FINISHED;
-    if(id>=0 && id<3 && config) game.mode=id;
-    if(id==11 && config) game.rule=!game.rule;
-    if(id==12 && config) game.difficulty=(game.difficulty+1)%3;
+    if(id>=0 && id<3 && config) settings.mode=id;
+    if(id==11 && config) settings.rule=!settings.rule;
+    if(id==12 && config) settings.difficulty=(settings.difficulty+1)%3;
+    // Keep the completed round intact while preparing the next one.
+    if(game.phase==LOBBY) apply_settings();
     if(id==13) {muted=!muted;if(muted)PlaySoundA(NULL,NULL,0);}
-    if(id==10) {if(config)game_start(&game);else game_pause(&game);clear_input();accumulator=0;}
+    if(id==10) {if(config)start_round();else {game_pause(&game);clear_input();accumulator=0;}}
 }
 static void mouse_point(LPARAM lp,int *x,int *y) {
     float s=fminf((float)client_w/WIDTH,(float)client_h/HEIGHT);
@@ -328,10 +335,36 @@ static int native_checks(HWND hwnd) {
     step_input(1.0f/120);CHECK(game.nets[0].swing>0);
     SendMessage(hwnd,WM_KILLFOCUS,0,0);CHECK(!mouse_down && !keys[VK_SPACE] && game.phase==PAUSED);
     SendMessage(hwnd,WM_KEYDOWN,'R',0);CHECK(game.phase==COUNTDOWN && game.next==0);
+    // Editing next-round choices must not rewrite a completed golden victory.
+    game.phase=PLAYING;game.next=3;game.launch_in=10;
+    game.butterflies[game.golden_index].golden=0;game.golden_index=0;game.butterflies[0].golden=1;
+    for(int i=0;i<3;i++){game.butterflies[i].state=CAUGHT;game.butterflies[i].owner=i?1:0;}
+    game.nets[0].score=1;game.nets[1].score=2;game.golden_owner=0;
+    step_input(1.0f/120);CHECK(game.phase==FINISHED && game_winner(&game)==0);
+    Game completed=game;
+    SendMessage(hwnd,WM_KEYDOWN,'G',0);SendMessage(hwnd,WM_KEYDOWN,'B',0);
+    for(int i=0;i<3;i++){SendMessage(hwnd,WM_KEYDOWN,'1'+i,0);CHECK(!memcmp(&game,&completed,sizeof(game)));}
+    SendMessage(hwnd,WM_KEYDOWN,'1',0);
+    CHECK(game_winner(&game)==0 && game_net_count(&game)==2);
+    SendMessage(hwnd,WM_KEYDOWN,VK_RETURN,0);
+    CHECK(game.phase==COUNTDOWN && game.mode==0 && game.rule==0 && game.difficulty==2);
+    CHECK(game.nets[0].score==0 && game.nets[1].score==0 && game.golden_owner==-1);
+    game=completed;SendMessage(hwnd,WM_KEYDOWN,'3',0);SendMessage(hwnd,WM_KEYDOWN,'R',0);
+    CHECK(game.phase==COUNTDOWN && game.mode==2 && game.rule==0 && game.difficulty==2);
+    game=completed;SendMessage(hwnd,WM_KEYDOWN,'2',0);SendMessage(hwnd,WM_KEYDOWN,VK_ESCAPE,0);
+    CHECK(game.phase==LOBBY && game.mode==1 && game.rule==0 && game.difficulty==2);
+    // A 960 x 820 client adds 82 px margins above and below the game.
+    SendMessage(hwnd,WM_SIZE,0,MAKELPARAM(960,820));
+    SendMessage(hwnd,WM_LBUTTONDOWN,0,MAKELPARAM(792,50));CHECK(game.phase==LOBBY);
+    SendMessage(hwnd,WM_LBUTTONDOWN,0,MAKELPARAM(792,642));CHECK(game.phase==COUNTDOWN);
+    game.phase=PLAYING;game.nets[0].x=590;game.nets[0].y=500;
+    SendMessage(hwnd,WM_MOUSEMOVE,0,MAKELPARAM(480,482));CHECK(abs(mouse_x-600)<=1 && abs(mouse_y-500)<=1);
+    SendMessage(hwnd,WM_LBUTTONDOWN,0,MAKELPARAM(480,482));SendMessage(hwnd,WM_LBUTTONUP,0,MAKELPARAM(480,482));
+    step_input(1.0f/120);CHECK(game.nets[0].x>590 && game.nets[0].x<=600 && fabsf(game.nets[0].y-500)<=1 && game.nets[0].swing>0);
     CHECK(test_presentation());
     DWORD handles=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
     for(int i=0;i<60;i++)render();CHECK(handles==GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS));
-    FILE *f=fopen("smoke-result.txt","w");if(f){fprintf(f,"%s: native window, countdown, pause, resume, focus loss, restart, mode/rule/breeze selection, mouse movement, mouse scoop, short keyboard scoops, both players movement, sound toggle, four presentation sizes, stable GDI resources.\n",ok?"PASS":"FAIL");fclose(f);}
+    FILE *f=fopen("smoke-result.txt","w");if(f){fprintf(f,"%s: native window, countdown, pause, resume, focus loss, restart, mode/rule/breeze selection, mouse movement, mouse scoop, short keyboard scoops, both players movement, sound toggle, completed results preserved across next-round choices, letterboxed mouse controls, four presentation sizes, stable GDI resources.\n",ok?"PASS":"FAIL");fclose(f);}
     if(log)fclose(log);
 #undef CHECK
     return ok;
@@ -348,12 +381,12 @@ static LRESULT CALLBACK wndproc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
         if(game.phase==PLAYING) {if(wp==VK_SPACE)tapped[0]=1;if(wp==VK_CONTROL)tapped[1]=1;}
         if(wp==VK_RETURN && (game.phase==LOBBY||game.phase==FINISHED||game.phase==PAUSED))action(10);
         if(wp=='P'){game_pause(&game);clear_input();}
-        if(wp=='R' && game.phase!=LOBBY){game_start(&game);clear_input();}
+        if(wp=='R' && game.phase!=LOBBY)start_round();
         if(wp=='M')action(13);
         if(wp=='G')action(11);
         if(wp=='B')action(12);
         if(wp>='1'&&wp<='3')action((int)(wp-'1'));
-        if(wp==VK_ESCAPE){int mode=game.mode,rule=game.rule,diff=game.difficulty;uint32_t seed=game.rng;game_init(&game,seed);game.mode=mode;game.rule=rule;game.difficulty=diff;clear_input();accumulator=0;}
+        if(wp==VK_ESCAPE){uint32_t seed=game.rng;game_init(&game,seed);apply_settings();clear_input();accumulator=0;}
         return 0;
     case WM_KEYUP:if(wp<256)keys[wp]=0;return 0;
     case WM_KILLFOCUS:clear_input();if(game.phase==PLAYING||game.phase==COUNTDOWN)game_pause(&game);return 0;
@@ -378,7 +411,7 @@ int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR cmd,int show) {
     (void)previous;(void)cmd;SetProcessDPIAware();game_init(&game,(uint32_t)GetTickCount());init_canvas();init_sounds();
     for(int i=1;i<__argc;i++) {
         if(!strcmp(__argv[i],"--snapshot")&&i+1<__argc){const char *path=__argv[++i];
-            if(i+1<__argc){game_init(&game,375);game.mode=1;game_start(&game);game.phase=PLAYING;
+            if(i+1<__argc){game_init(&game,375);settings.mode=1;start_round();game.phase=PLAYING;
                 Input in={0};for(int t=0;t<1200;t++){in.mouse=1;in.scoop[0]=1;in.mouse_x=270;in.mouse_y=445;game_step(&game,1.0f/120,&in);}
                 if(!strcmp(__argv[i+1],"paused"))game_pause(&game);
                 if(!strcmp(__argv[i+1],"results"))game.phase=FINISHED;
