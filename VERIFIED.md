@@ -1,31 +1,22 @@
 # Verification
 
-For commands to reproduce these checks, see the [build and test guide](BUILD.md). For downloads and controls, see the [README](README.md).
+Elefun 1.0.0 keeps the existing 31-butterfly simulation and artwork. Checks here distinguish simulation, native Windows execution, rendering, and physical hardware observation.
 
-Rebuilt and checked on Windows x64 on October 2, 2026 with Clang 23.1.2 from LLVM MinGW 20260922, C11, optimization, and all enabled compiler warnings treated as errors. The simulation, native message-handler checks, renderer fixtures, and executable imports below were rerun for this build.
+The named local build uses Windows 11 x64 build 26300, Clang 23.1.2 / LLVM MinGW 20260922 UCRT x86_64, C11, optimization and compiler warnings as errors. Windows 10 x64 uses the same system API/UCRT target; a separate Windows 10 machine was not tested.
 
-| Check | Result |
+| Check | Scope |
 | :--- | :--- |
-| Full simulation suite | 360 rounds across all 3 modes, 2 rules, 3 breeze settings and 20 random seeds; all completed |
-| Scoring | 9,589 catches across the full suite; every caught butterfly had exactly one owner and matching score |
-| Butterfly accounting | All 31 butterflies conserved as waiting, airborne, grounded or caught in every checked step |
-| Golden rule | Golden catch immediately ends the round and determines the winner |
-| Floor pickups | Grounded butterflies are catchable for exactly one point |
-| Simultaneous catches | Nearest net wins; exact overlaps alternate priority across butterfly IDs |
-| Motion | Finite positions and velocities, playfield bounds and net bounds passed |
-| State changes | Countdown, pause, resume, restart, idle completion and frozen final state passed |
-| Native input | Both players movement, mouse movement, mouse scoops and short keyboard scoops passed |
-| Native controls | Mode, rule, breeze, sound, start, focus loss and restart passed |
-| Completed results | A seeded golden victory with a lower score stayed unchanged while selecting each mode, another rule, and another breeze; Enter, restart and lobby return applied the selected choices |
-| Resized mouse input | At a 960 × 820 client size, letterbox clicks were ignored and the start button, mouse coordinates, net movement and scoop passed |
-| Frame presentation | Verified output pixels across four window sizes, eight frames per size |
-| Graphics resources | GDI object count remained stable across 60 repeated draws |
-| Layout inspection | Lobby, gameplay, pause and results fixtures inspected from the actual C renderer, including the next-round settings label |
-| Earlier live playtest | Previously observed the lobby, pause, countdown, active flight with score updates, and a completed solo round showing 23 of 31 caught; this manual playtest was not repeated for the current build |
-| Executable dependencies | Imports only Windows system libraries and the Windows Universal C Runtime |
+| Simulation | 360 complete rounds across all 3 modes, 2 rules, 3 breezes and 20 seeds; 9,589 catches with owner/score conservation |
+| Simulation edge behavior | Golden immediate victory, floor pickups, tie fairness, finite motion/bounds, pause, countdown, restart, idle completion, invalid time step and frozen results |
+| Native smoke | Actual Win32 input handlers, both player movement/short scoops, mouse, pause/focus/restart, settings/sound toggle, completed results, letterboxed controls, four presentation sizes and stable graphics object count |
+| Native round fixture | Real Windows timer and normal input handlers complete Solo, Vs CPU and 2 Players; no forced finish or seeded scores; pause/focus, result preservation and restart checks |
+| Delivery | Matching source and Windows ZIPs carry version, exact commit/tree, executable hash and source Git blobs; the consumer script checks every source byte and builds the extracted source |
+| Automation | Windows Actions repeats build, package and consumer checks; local outcomes and CI outcomes are distinct |
 
-The completed-results regression failed before the settings fix and passed afterward. Native checks use a hidden Windows window and actual message handlers; the completed-round fixture is seeded, and rendering snapshots do not prove a live round was played.
+The native acceptance fixture sends controlled Windows messages and writes images from actual round states. It does not count as someone manually playing complete rounds. Generated rendering previews are seeded and are separate from naturally completed rounds.
 
-The sound generator and sound toggle are implemented and compiled. Speaker output has not been verified by listening. Two people sharing a physical keyboard was not tested. Hardware key rollover can limit simultaneous keys on some keyboards.
+Audio request results show whether Windows accepted playback calls. Physical sound and simultaneous key behavior require a separate observation using [PLAYTEST.md](docs/PLAYTEST.md); automated messages cannot establish either. Key rollover depends on the keyboard, and mouse-first player one controls reduce the number of simultaneous keys.
 
-The renderer composes both the scene and scaled window frame in memory and performs one complete transfer to the visible window. No intermediate dark or white background clearing is used.
+The game stores no persistent scores or settings and makes no network requests. Windows native rendering, input and sound are the supported delivery; Linux/macOS are not included executable targets.
+
+The [October 2 verification record](docs/historical-verification-2026-10-02.md) preserves the earlier tests and their limits. Its live-play and hardware notes remain dated historical observations, not new v1 observations. Reproduce current checks with [BUILD.md](BUILD.md) and exact-package checks with [RELEASING.md](docs/RELEASING.md).

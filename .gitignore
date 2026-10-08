@@ -1,8 +1,13 @@
 /build/
+/release-artifacts/
+/release-staging/
+/reports/
 /smoke-result.txt
+/smoke-details.txt
+/acceptance-result.txt
+/acceptance-details.txt
 *.bmp
 *.o
 *.obj
 *.pdb
 *.ilk
-/smoke-details.txt
