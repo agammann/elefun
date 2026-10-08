@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include "game.h"
+#include "version.h"
 #define WIDTH 1200
 #define HEIGHT 820
 #define SCALE 2
@@ -30,6 +32,10 @@ static double accumulator;
 static LARGE_INTEGER last_tick,frequency;
 static unsigned char sounds[3][9000];
 static int smoke,smoke_ticks;
+static int acceptance,acceptance_ticks,acceptance_round,acceptance_pause_stage;
+static int acceptance_ok=1,audio_accepted,audio_failed;
+static FILE *acceptance_log;
+static Game acceptance_paused;
 
 static void fill(float x,float y,float w,float h,COLORREF color) {
     HBRUSH b=CreateSolidBrush(color); RECT r={(LONG)x,(LONG)y,(LONG)(x+w),(LONG)(y+h)}; FillRect(canvas,&r,b); DeleteObject(b);
@@ -185,14 +191,19 @@ static void render(void) {
     }
 }
 
-static void init_canvas(void) {
+static int init_canvas(void) {
     canvas=CreateCompatibleDC(NULL);
+    if(!canvas)return 0;
     BITMAPINFO bi; memset(&bi,0,sizeof(bi)); bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);
     bi.bmiHeader.biWidth=WIDTH*SCALE; bi.bmiHeader.biHeight=-HEIGHT*SCALE; bi.bmiHeader.biPlanes=1; bi.bmiHeader.biBitCount=32; bi.bmiHeader.biCompression=BI_RGB;
-    bitmap=CreateDIBSection(canvas,&bi,DIB_RGB_COLORS,&pixels,NULL,0); old_bitmap=SelectObject(canvas,bitmap);
-    SetGraphicsMode(canvas,GM_ADVANCED); XFORM xf={SCALE,0,0,SCALE,0,0}; SetWorldTransform(canvas,&xf);
+    bitmap=CreateDIBSection(canvas,&bi,DIB_RGB_COLORS,&pixels,NULL,0);
+    if(!bitmap||!pixels)return 0;
+    old_bitmap=SelectObject(canvas,bitmap);
+    if(!old_bitmap||old_bitmap==HGDI_ERROR||!SetGraphicsMode(canvas,GM_ADVANCED))return 0;
+    XFORM xf={SCALE,0,0,SCALE,0,0};if(!SetWorldTransform(canvas,&xf))return 0;
     const int sizes[]={12,15,16,29,32,52,42};
-    for(int i=0;i<7;i++) fonts[i]=CreateFontA(-sizes[i],0,0,0,i==1?FW_NORMAL:FW_BOLD,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,"Segoe UI");
+    for(int i=0;i<7;i++){fonts[i]=CreateFontA(-sizes[i],0,0,0,i==1?FW_NORMAL:FW_BOLD,0,0,0,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,"Segoe UI");if(!fonts[i])return 0;}
+    return 1;
 }
 static void destroy_frame(void) {
     if(frame_dc && frame_old_bitmap) SelectObject(frame_dc,frame_old_bitmap);
@@ -252,9 +263,11 @@ static int test_presentation(void) {
 }
 static void destroy_canvas(void) {
     destroy_frame();
-    SelectObject(canvas,GetStockObject(SYSTEM_FONT));
-    for(int i=0;i<7;i++) DeleteObject(fonts[i]);
-    SelectObject(canvas,old_bitmap); DeleteObject(bitmap); DeleteDC(canvas);
+    if(canvas)SelectObject(canvas,GetStockObject(SYSTEM_FONT));
+    for(int i=0;i<7;i++)if(fonts[i])DeleteObject(fonts[i]);
+    if(canvas&&old_bitmap&&old_bitmap!=HGDI_ERROR)SelectObject(canvas,old_bitmap);
+    if(bitmap)DeleteObject(bitmap);
+    if(canvas)DeleteDC(canvas);
 }
 static int snapshot(const char *path) {
     render(); GdiFlush(); FILE *f=fopen(path,"wb"); if(!f) return 0;
@@ -369,6 +382,105 @@ static int native_checks(HWND hwnd) {
 #undef CHECK
     return ok;
 }
+// Complete real-timer rounds with deterministic messages through the normal controls.
+// This is an automated native check; it cannot prove physical hearing or key rollover.
+static void acceptance_check(int value,const char *what) {
+    if(!value){acceptance_ok=0;fprintf(acceptance_log,"FAIL: %s\n",what);fflush(acceptance_log);}
+}
+static void acceptance_snapshot(const char *phase) {
+    char path[96];snprintf(path,sizeof(path),"acceptance-%d-%s.bmp",acceptance_round,phase);
+    acceptance_check(snapshot(path),"write rendered round image");
+}
+static void acceptance_drive(HWND hwnd) {
+    for(int p=0;p<game_net_count(&game);p++) {
+        if(p==1&&game.mode==1)continue;
+        int target=-1;float distance=1e9f;
+        for(int i=0;i<BUTTERFLY_COUNT;i++){
+            Butterfly *b=&game.butterflies[i];
+            if((b->state!=AIR&&b->state!=GROUND)||(b->state==AIR&&b->vy<0))continue;
+            float d=hypotf(b->x-game.nets[p].x,b->y-game.nets[p].y);
+            if(d<distance){distance=d;target=i;}
+        }
+        if(target<0)continue;
+        Butterfly *b=&game.butterflies[target];
+        if(p==0){
+            float s=fminf((float)client_w/WIDTH,(float)client_h/HEIGHT);
+            int x=(int)((client_w-WIDTH*s)*0.5f+b->x*s),y=(int)((client_h-HEIGHT*s)*0.5f+b->y*s);
+            SendMessage(hwnd,WM_MOUSEMOVE,0,MAKELPARAM(x,y));
+            // Mouse-click SetFocus on a hidden fixture triggers another focus loss.
+            // Use the ordinary Space scoop handler with mouse movement for this check.
+            SendMessage(hwnd,WM_KEYDOWN,VK_SPACE,keys[VK_SPACE]?(1L<<30):0);
+        }else{
+            int horizontal=b->x-game.nets[1].x>3?VK_RIGHT:b->x-game.nets[1].x<-3?VK_LEFT:0;
+            int vertical=b->y-game.nets[1].y>3?VK_DOWN:b->y-game.nets[1].y<-3?VK_UP:0;
+            const int movement[]={VK_LEFT,VK_RIGHT,VK_UP,VK_DOWN};
+            for(int i=0;i<4;i++)SendMessage(hwnd,movement[i]==horizontal||movement[i]==vertical?WM_KEYDOWN:WM_KEYUP,(WPARAM)movement[i],keys[movement[i]]?(1L<<30):0);
+            SendMessage(hwnd,WM_KEYDOWN,VK_CONTROL,keys[VK_CONTROL]?(1L<<30):0);
+        }
+    }
+}
+static void acceptance_finish(HWND hwnd) {
+    fprintf(acceptance_log,"Audio requests accepted: %d; rejected: %d. API evidence only, not a listening test.\n",audio_accepted,audio_failed);
+    if(fclose(acceptance_log)!=0)acceptance_ok=0;
+    acceptance_log=NULL;
+    FILE *result=fopen("acceptance-result.txt","w");
+    if(!result)acceptance_ok=0;
+    else{
+        if(fprintf(result,"%s: three natural native rounds in Solo, Vs CPU and 2 Players; real countdown/timer, mouse and keyboard control messages, catches/ownership, pause/focus recovery, completed result preservation and fresh restart. Physical speaker output and keyboard rollover require a separate observation.\n",acceptance_ok?"PASS":"FAIL")<0)acceptance_ok=0;
+        if(fclose(result)!=0)acceptance_ok=0;
+    }
+    DestroyWindow(hwnd);PostQuitMessage(acceptance_ok?0:1);
+}
+static void acceptance_step(HWND hwnd) {
+    acceptance_ticks++;
+    if(acceptance_ticks%120==0){fprintf(acceptance_log,"Progress mode %d phase %d pause-stage %d elapsed %.3f next %d caught %d.\n",game.mode,game.phase,acceptance_pause_stage,(double)game.elapsed,game.next,game_count(&game,CAUGHT));fflush(acceptance_log);}
+    if(acceptance_ticks>16000){acceptance_check(0,"round fixture time limit");acceptance_finish(hwnd);return;}
+    if(game.phase==COUNTDOWN&&acceptance_pause_stage==0&&game.countdown<2.7f){
+        SendMessage(hwnd,WM_KEYDOWN,'P',0);acceptance_check(game.phase==PAUSED,"pause during actual countdown");
+        acceptance_paused=game;acceptance_pause_stage=1;acceptance_ticks=0;acceptance_snapshot("paused-countdown");
+    }else if(acceptance_pause_stage==1&&acceptance_ticks>=20){
+        acceptance_check(!memcmp(&game,&acceptance_paused,sizeof(game)),"paused countdown unchanged across actual timers");
+        SendMessage(hwnd,WM_KEYDOWN,VK_RETURN,0);acceptance_check(game.phase==COUNTDOWN,"resume same countdown");
+        acceptance_pause_stage=2;acceptance_ticks=0;
+    }else if(game.phase==PLAYING&&acceptance_pause_stage==2&&game.elapsed>1){
+        SendMessage(hwnd,WM_KEYDOWN,'W',0);SendMessage(hwnd,WM_KEYDOWN,VK_SPACE,0);
+        SendMessage(hwnd,WM_KEYDOWN,VK_LEFT,0);SendMessage(hwnd,WM_KEYDOWN,VK_CONTROL,0);
+        SendMessage(hwnd,WM_KILLFOCUS,0,0);
+        acceptance_check(game.phase==PAUSED,"focus loss pauses live round");
+        int clear=!mouse_down&&!mouse_tap;for(int i=0;i<256;i++)clear&=!keys[i];
+        acceptance_check(clear&&!tapped[0]&&!tapped[1],"focus loss clears held and short inputs");
+        acceptance_paused=game;acceptance_pause_stage=3;acceptance_ticks=0;acceptance_snapshot("paused-playing");
+    }else if(acceptance_pause_stage==3&&acceptance_ticks>=20){
+        acceptance_check(!memcmp(&game,&acceptance_paused,sizeof(game)),"paused live round unchanged across actual timers");
+        SendMessage(hwnd,WM_KEYDOWN,VK_RETURN,0);acceptance_check(game.phase==PLAYING,"resume same live round");
+        acceptance_pause_stage=4;acceptance_ticks=0;acceptance_snapshot("playing");
+    }
+    if(game.phase==PLAYING)acceptance_drive(hwnd);
+    if(game.phase!=FINISHED)return;
+    int scores[2]={0};for(int i=0;i<BUTTERFLY_COUNT;i++)if(game.butterflies[i].state==CAUGHT){
+        int owner=game.butterflies[i].owner;
+        acceptance_check(owner>=0&&owner<game_net_count(&game),"caught butterfly owner in active players");
+        if(owner>=0&&owner<2)scores[owner]++;
+    }
+    acceptance_check(game.next==BUTTERFLY_COUNT,"complete round released all butterflies");
+    acceptance_check(scores[0]==game.nets[0].score&&scores[1]==game.nets[1].score,"exact score ownership conservation");
+    acceptance_check(scores[0]>0&&(game.mode==0||scores[1]>0),"each active player caught butterflies");
+    acceptance_check(acceptance_pause_stage==4,"pause and focus recovery both exercised");
+    fprintf(acceptance_log,"Round mode %d: elapsed %.3f seconds; scores %d/%d; caught %d; ground %d; winner %d; API audio %d/%d.\n",game.mode,(double)game.elapsed,scores[0],scores[1],game_count(&game,CAUGHT),game_count(&game,GROUND),game_winner(&game),audio_accepted,audio_failed);fflush(acceptance_log);
+    acceptance_snapshot("results");
+    Game completed=game;SendMessage(hwnd,WM_KEYDOWN,'G',0);SendMessage(hwnd,WM_KEYDOWN,'B',0);
+    SendMessage(hwnd,WM_KEYDOWN,'1'+((acceptance_round+1)%3),0);
+    acceptance_check(!memcmp(&game,&completed,sizeof(game)),"next choices preserve completed round");
+    SendMessage(hwnd,WM_KEYDOWN,'R',0);
+    acceptance_check(game.phase==COUNTDOWN&&game.next==0&&!game.nets[0].score&&!game.nets[1].score,"restart resets scores and begins countdown");
+    acceptance_snapshot("restart");
+    SendMessage(hwnd,WM_KEYDOWN,VK_ESCAPE,0);acceptance_check(game.phase==LOBBY,"return to lobby");
+    if(++acceptance_round==3){acceptance_finish(hwnd);return;}
+    SendMessage(hwnd,WM_KEYDOWN,'G',0);SendMessage(hwnd,WM_KEYDOWN,'B',0);SendMessage(hwnd,WM_KEYDOWN,'B',0);
+    SendMessage(hwnd,WM_KEYDOWN,'1'+acceptance_round,0);
+    acceptance_pause_stage=0;acceptance_ticks=0;acceptance_snapshot("lobby");
+    SendMessage(hwnd,WM_KEYDOWN,VK_RETURN,0);acceptance_snapshot("countdown");
+}
 static LRESULT CALLBACK wndproc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     switch(msg) {
     case WM_ERASEBKGND:return 1;
@@ -397,9 +509,10 @@ static LRESULT CALLBACK wndproc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     case WM_TIMER:{
         LARGE_INTEGER now;QueryPerformanceCounter(&now);double dt=(double)(now.QuadPart-last_tick.QuadPart)/(double)frequency.QuadPart;last_tick=now;
         if(dt>0.1)dt=0.1;accumulator+=dt;while(accumulator>=1.0/120.0){step_input(1.0f/120);accumulator-=1.0/120.0;}
-        if(game.sound_events&&!muted){int k=(game.sound_events&4)?2:(game.sound_events&2)?1:0;PlaySoundA((LPCSTR)sounds[k],NULL,SND_MEMORY|SND_ASYNC|SND_NODEFAULT);}game.sound_events=0;
+        if(game.sound_events&&!muted){int k=(game.sound_events&4)?2:(game.sound_events&2)?1:0;if(PlaySoundA((LPCSTR)sounds[k],NULL,SND_MEMORY|SND_ASYNC|SND_NODEFAULT))audio_accepted++;else audio_failed++;}game.sound_events=0;
         InvalidateRect(hwnd,NULL,FALSE);
-        if(smoke&&++smoke_ticks==12){int ok=native_checks(hwnd);DestroyWindow(hwnd);if(!ok)PostQuitMessage(1);}return 0;
+        if(smoke&&++smoke_ticks==12){int ok=native_checks(hwnd);DestroyWindow(hwnd);if(!ok)PostQuitMessage(1);}
+        if(acceptance)acceptance_step(hwnd);return 0;
     }
     case WM_PAINT:{PAINTSTRUCT ps;HDC target=BeginPaint(hwnd,&ps);render();present_frame(target,client_w,client_h);EndPaint(hwnd,&ps);return 0;}
     case WM_CLOSE:DestroyWindow(hwnd);return 0;
@@ -407,28 +520,62 @@ static LRESULT CALLBACK wndproc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     default:return DefWindowProc(hwnd,msg,wp,lp);
     }
 }
+static int startup_error(const char *message) {
+    if(smoke||acceptance)fprintf(stderr,"Elefun startup failed: %s (Windows error %lu).\n",message,(unsigned long)GetLastError());
+    else MessageBoxA(NULL,message,"Elefun could not start",MB_OK|MB_ICONERROR);
+    destroy_canvas();return 1;
+}
 int WINAPI WinMain(HINSTANCE instance,HINSTANCE previous,LPSTR cmd,int show) {
-    (void)previous;(void)cmd;SetProcessDPIAware();game_init(&game,(uint32_t)GetTickCount());init_canvas();init_sounds();
-    for(int i=1;i<__argc;i++) {
-        if(!strcmp(__argv[i],"--snapshot")&&i+1<__argc){const char *path=__argv[++i];
-            if(i+1<__argc){game_init(&game,375);settings.mode=1;start_round();game.phase=PLAYING;
-                Input in={0};for(int t=0;t<1200;t++){in.mouse=1;in.scoop[0]=1;in.mouse_x=270;in.mouse_y=445;game_step(&game,1.0f/120,&in);}
-                if(!strcmp(__argv[i+1],"paused"))game_pause(&game);
-                if(!strcmp(__argv[i+1],"results"))game.phase=FINISHED;
-            }
-            int ok=snapshot(path);destroy_canvas();return ok?0:1;
+    (void)previous;(void)cmd;
+    uint32_t seed=(uint32_t)GetTickCount();const char *image=NULL,*phase="lobby";int operation=0;
+    for(int i=1;i<__argc;i++){
+        if(!strcmp(__argv[i],"--version")&&__argc==2){printf("Elefun %s\n",ELEFUN_VERSION);return 0;}
+        if(!strcmp(__argv[i],"--help")&&__argc==2){puts("Elefun [--seed 1..4294967295] [--smoke-test | --acceptance-test | --snapshot FILE.bmp [lobby|playing|paused|results]]");return 0;}
+        if(!strcmp(__argv[i],"--seed")&&i+1<__argc){
+            const char *text=__argv[++i];char *end;errno=0;unsigned long value=strtoul(text,&end,10);
+            if(!*text||*end||errno||text[0]=='-'||text[0]=='+'||value==0||value>UINT32_MAX){fprintf(stderr,"Seed must be an integer from 1 to 4294967295.\n");return 2;}
+            seed=(uint32_t)value;continue;
         }
-        if(!strcmp(__argv[i],"--smoke-test"))smoke=1;
+        if(!strcmp(__argv[i],"--smoke-test")&&!operation){smoke=operation=1;continue;}
+        if(!strcmp(__argv[i],"--acceptance-test")&&!operation){acceptance=operation=2;continue;}
+        if(!strcmp(__argv[i],"--snapshot")&&!operation&&i+1<__argc){
+            image=__argv[++i];operation=3;
+            if(i+1<__argc&&__argv[i+1][0]!='-')phase=__argv[++i];
+            if(!*image||(strcmp(phase,"lobby")&&strcmp(phase,"playing")&&strcmp(phase,"paused")&&strcmp(phase,"results"))){fprintf(stderr,"Snapshot phase must be lobby, playing, paused or results.\n");return 2;}
+            continue;
+        }
+        fprintf(stderr,"Unknown or incompatible argument: %s. Use --help.\n",__argv[i]);return 2;
+    }
+    SetProcessDPIAware();game_init(&game,seed);
+    if(!init_canvas())return startup_error("Windows could not allocate the drawing resources. Close other applications and try again.");
+    init_sounds();
+    if(image){
+        if(strcmp(phase,"lobby")){game_init(&game,375);settings.mode=1;start_round();game.phase=PLAYING;
+            Input in={0};for(int t=0;t<1200;t++){in.mouse=1;in.scoop[0]=1;in.mouse_x=270;in.mouse_y=445;game_step(&game,1.0f/120,&in);}
+            if(!strcmp(phase,"paused"))game_pause(&game);
+            if(!strcmp(phase,"results"))game.phase=FINISHED;
+        }
+        int ok=snapshot(image);if(!ok)fprintf(stderr,"Could not write snapshot: %s. Choose a writable folder that already exists.\n",image);
+        destroy_canvas();return ok?0:1;
     }
     WNDCLASSA wc;memset(&wc,0,sizeof(wc));wc.lpfnWndProc=wndproc;wc.hInstance=instance;wc.lpszClassName="ElefunButterflyClub";
     wc.hCursor=LoadCursor(NULL,IDC_ARROW);wc.hIcon=LoadIcon(NULL,IDI_APPLICATION);
-    if(!RegisterClassA(&wc)){destroy_canvas();return 1;}
+    if(!RegisterClassA(&wc))return startup_error("Windows could not register the game window. Close Elefun and try again.");
     RECT rect={0,0,WIDTH,HEIGHT};AdjustWindowRect(&rect,WS_OVERLAPPEDWINDOW,FALSE);int ww=rect.right-rect.left,wh=rect.bottom-rect.top;
     if(wh>GetSystemMetrics(SM_CYSCREEN)-80){wh=GetSystemMetrics(SM_CYSCREEN)-80;ww=(int)((float)wh*WIDTH/HEIGHT);}
-    window=CreateWindowA(wc.lpszClassName,"Elefun | The Butterfly Club",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,ww,wh,NULL,NULL,instance,NULL);
-    if(!window){destroy_canvas();return 1;}
-    QueryPerformanceFrequency(&frequency);QueryPerformanceCounter(&last_tick);SetTimer(window,1,16,NULL);ShowWindow(window,smoke?SW_HIDE:show);UpdateWindow(window);
+    window=CreateWindowA(wc.lpszClassName,"Elefun " ELEFUN_VERSION " | The Butterfly Club",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,ww,wh,NULL,NULL,instance,NULL);
+    if(!window)return startup_error("Windows could not create the game window. Close other applications and try again.");
+    if(!QueryPerformanceFrequency(&frequency)||frequency.QuadPart<=0||!QueryPerformanceCounter(&last_tick)||!SetTimer(window,1,16,NULL)){
+        DestroyWindow(window);return startup_error("Windows could not start the game timer. Restart the application and try again.");
+    }
+    ShowWindow(window,smoke||acceptance?SW_HIDE:show);UpdateWindow(window);
     if(smoke)SendMessage(window,WM_KEYDOWN,VK_RETURN,0);
+    if(acceptance){
+        acceptance_log=fopen("acceptance-details.txt","w");
+        if(!acceptance_log){DestroyWindow(window);destroy_canvas();return 1;}
+        fprintf(acceptance_log,"Elefun %s; seed %u; real Windows timer and controls, no synthetic finish or skipped simulation time.\n",ELEFUN_VERSION,(unsigned)seed);fflush(acceptance_log);
+        acceptance_snapshot("lobby");SendMessage(window,WM_KEYDOWN,VK_RETURN,0);acceptance_snapshot("countdown");
+    }
     MSG msg;int result;while((result=GetMessage(&msg,NULL,0,0))>0){TranslateMessage(&msg);DispatchMessage(&msg);}
-    PlaySoundA(NULL,NULL,0);destroy_canvas();return result<0?1:(int)msg.wParam;
+    PlaySoundA(NULL,NULL,0);if(acceptance_log)fclose(acceptance_log);destroy_canvas();return result<0?1:(int)msg.wParam;
 }

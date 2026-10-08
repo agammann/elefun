@@ -1,83 +1,72 @@
 # Build and test Elefun
 
-**You only need this guide to compile or test the source.** To play, use the executable linked in the [README](README.md#start-playing).
+To play without compiling, download the Windows ZIP linked in [README.md](README.md#start-playing). These steps are for the matching v1.0.0 C source ZIP.
 
 ## Requirements
 
-Use Windows 10 or 11 on x64, PowerShell, and an x64 Windows C compiler from **LLVM MinGW** or **MinGW GCC**. The compiler needs its Windows headers and libraries. An ordinary Clang installation without the MinGW toolchain is not sufficient for this build script.
+Use Windows 10 or 11 x64, Windows PowerShell 5.1 or newer, and the complete **LLVM MinGW 20260922 UCRT x86_64** toolchain. The checked compiler is **Clang 23.1.2**. An ordinary Clang install without Windows headers, libraries and `windres.exe` is insufficient. MinGW GCC may compile the C11 source, but this release is checked with the named LLVM MinGW toolchain.
 
-The source uses C11 and the Windows Win32, GDI, and WinMM libraries. No external game engine or asset download is required. The included executable was built with Clang 23.1.2 from LLVM MinGW. MinGW GCC is supported by the script but has not been verified in this project.
+Get `llvm-mingw-20260922-ucrt-x86_64.zip` from the [LLVM MinGW 20260922 release](https://github.com/mstorsjo/llvm-mingw/releases/tag/20260922) and extract the whole folder. Its SHA256 is `e3ad77d117a4bea19a7a3b333341824d79a5a371004a10e25b8504e7b3047666`. Keep `bin\clang.exe`, `bin\windres.exe`, headers and libraries together. Runtime uses only Windows system libraries and the Universal C Runtime supplied with Windows 10/11.
 
-To use the tested compiler, open the [LLVM MinGW 20260922 release](https://github.com/mstorsjo/llvm-mingw/releases/tag/20260922), download `llvm-mingw-20260922-ucrt-x86_64.zip` from its Assets list, and extract it. Keep the entire toolchain folder together. The compiler is `bin\clang.exe` inside that folder; you do not need to change PATH when using the explicit command below.
+## Build from the extracted source
 
-## Compile the game
-
-1. Download and extract the [complete project ZIP](https://github.com/agammann/elefun/archive/refs/heads/main.zip), or clone this repository.
-2. Open PowerShell in the extracted project folder, where `build.ps1` and `src` are located.
-3. Run the command below, replacing the example compiler path with the path to your toolchain. Keep the quotes if the path contains spaces.
+Extract `elefun_1.0.0_source.zip`, open PowerShell, then run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Compiler "C:\path\to\llvm-mingw\bin\clang.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\elefun-1.0.0\build.ps1" -Compiler "C:\path\to\llvm-mingw-20260922-ucrt-x86_64\bin\clang.exe"
 ```
 
-If the appropriate `clang.exe` or `gcc.exe` is already on PATH, use:
+Use your own extracted folder paths. The script finds its source folder itself, so the terminal can be in another directory. If the tested compiler is on PATH, you can omit `-Compiler`; an explicit compiler takes precedence over `CC`, then PATH checks Clang before GCC.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
-```
+The script builds in a new `build/check-...` folder, treats warnings as errors, runs simulation and native smoke checks, verifies file version 1.0.0, then promotes the checked executable to `build/Elefun.exe`. Close an already running source-built game before rebuilding. A compile or test failure keeps the previous successful build and leaves the failed check folder for diagnosis. Failed stages do not count as a successful new build.
 
-The script also accepts the `CC` environment variable as a compiler path. An explicit `-Compiler` takes precedence; otherwise it checks `CC`, then searches PATH for `clang` before `gcc`. Pass `-Compiler` explicitly if you have several compilers installed.
+Success prints the simulation PASS lines, native PASS line and `Built Elefun 1.0.0 at build/Elefun.exe. Run Play.cmd to play.` Open `Play.cmd` in the source folder. The `build/build.json` receipt records source input hashes and the resulting executable hash.
 
-The script compiles `Elefun.exe`, builds `build\test_game.exe`, and runs the simulation tests. A successful run prints two `PASS` lines followed by `Built Elefun.exe. Double click it to play.` Compiler warnings are treated as errors. Building replaces the included executable, so close any running copy first.
+## Repeat the checks
 
-## Run simulation tests again
-
-From the project folder after a successful build:
+From the source folder after building:
 
 ```powershell
 & .\build\test_game.exe
-if ($LASTEXITCODE -ne 0) { throw 'Simulation tests failed.' }
+if ($LASTEXITCODE -ne 0) { throw 'Simulation checks failed.' }
 ```
 
-The suite covers 360 full rounds across all modes, rules, and breeze settings, plus scoring, ownership, gold catches, floor pickups, timing, and state changes. It does not open a game window.
+This covers **360 complete simulated rounds**, all three modes, both rules, all three breezes, 20 seeds, scoring/ownership, gold victory, floor pickups, ties, bounds, pause, invalid time steps, countdown and restart.
 
-## Check the native Windows application
-
-From the project folder, run:
+Run the actual native window checks in a writable folder:
 
 ```powershell
-$gamePath = Join-Path (Get-Location).Path 'Elefun.exe'
-$check = Start-Process -FilePath $gamePath -ArgumentList '--smoke-test' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -Wait -PassThru
+$game = (Resolve-Path .\build\Elefun.exe).Path
+$check = Start-Process -FilePath $game -ArgumentList '--smoke-test' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -Wait -PassThru
 Get-Content .\smoke-result.txt
-if ($check.ExitCode -ne 0) {
-    Get-Content .\smoke-details.txt
-    throw 'Native checks failed.'
-}
+Get-Content .\smoke-details.txt
+if ($check.ExitCode -ne 0) { throw 'Native smoke checks failed.' }
 ```
 
-Expect a `PASS` result and exit code 0. The hidden check exercises actual Windows message handlers for both players, the mouse, pause, focus changes, restart, settings, and sound toggling. It also checks that results survive next-round settings changes, mouse controls work with letterbox margins, rendered pixels match at four window sizes, and repeated drawing preserves GDI resource counts. It does not verify audible speaker output or replace playtesting with two people.
+The smoke check exercises actual input handlers, short keyboard/mouse scoops, pause/focus, settings/restart, frozen completed results, letterboxed mouse coordinates, four rendered sizes and stable GDI objects. Its completed-round state is seeded.
 
-Each run writes `smoke-result.txt` and `smoke-details.txt` in the working directory. Both files and the `build` directory are ignored by Git.
-
-## Export a rendering preview
-
-From the project folder:
+The longer check completes three natural rounds through the real Windows timer and normal input handlers, with no seeded scores or forced finish:
 
 ```powershell
-Start-Process -FilePath .\Elefun.exe -ArgumentList '--snapshot preview.bmp' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -Wait
-Start-Process -FilePath .\Elefun.exe -ArgumentList '--snapshot gameplay.bmp playing' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -Wait
+$check = Start-Process -FilePath $game -ArgumentList '--seed 42 --acceptance-test' -WorkingDirectory (Get-Location).Path -WindowStyle Hidden -Wait -PassThru
+Get-Content .\acceptance-result.txt
+Get-Content .\acceptance-details.txt
+if ($check.ExitCode -ne 0) { throw 'Native round checks failed.' }
 ```
 
-The first command writes a lobby image; the second writes a gameplay image. You can replace `playing` with `paused` or `results`. These BMP files are rendering fixtures, not evidence that someone completed a live round. Generated BMPs are ignored by Git.
+Allow up to four minutes. It drives Solo, Vs CPU and 2 Players with automated Windows messages, checks pause/focus recovery and restart, and writes `acceptance-*.bmp` rendering images. Audio API results are recorded, but cannot prove that a person heard sound. Automated messages cannot prove physical keyboard rollover. See [the physical check](docs/PLAYTEST.md).
 
-## Build troubleshooting
+## Rendering fixtures and command errors
 
-| Problem | Fix |
-| :--- | :--- |
-| Compiler not found | Use `-Compiler` with the full path to the toolchain's clang.exe or gcc.exe |
-| Missing windows.h or Windows libraries | Use a complete LLVM MinGW or MinGW GCC toolchain and select its compiler explicitly |
-| Permission denied while writing Elefun.exe | Close the running game and build in a folder you can write to |
-| A command cannot find build.ps1 or Elefun.exe | Open PowerShell in the extracted project folder before running it |
-| A test fails | Keep the full terminal output and, for native checks, both smoke text files when reporting the issue |
+```powershell
+Start-Process -FilePath $game -ArgumentList '--snapshot lobby.bmp lobby' -WindowStyle Hidden -Wait
+Start-Process -FilePath $game -ArgumentList '--snapshot playing.bmp playing' -WindowStyle Hidden -Wait
+```
 
-See [verification notes](VERIFIED.md) for tested behavior and remaining testing limits.
+The other phases are `paused` and `results`. These are seeded images from the real renderer, separate from naturally completed round images. `--version` prints `Elefun 1.0.0`; `--help` lists developer options. `--seed` accepts integers 1 through 4294967295. Unknown options, incompatible check modes and invalid seeds return a nonzero exit without opening a game. Snapshot output needs an existing writable folder.
+
+## If a build fails
+
+Select the complete named toolchain explicitly when Windows headers, libraries or `windres.exe` are missing. Build in a writable extracted folder and close `build/Elefun.exe` before promotion. Keep the full terminal output and the failed `build/check-...` folder. A native failure should include its result and details files. The game has no saved scores or persistent round state to migrate.
+
+Packaging requires Git, but ordinary play and source builds do not. [RELEASING.md](docs/RELEASING.md) describes the exact-source consumer check and release workflow.

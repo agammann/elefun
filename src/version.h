@@ -1,0 +1,5 @@
+#ifndef ELEFUN_VERSION_H
+#define ELEFUN_VERSION_H
+#define ELEFUN_VERSION "1.0.0"
+#define ELEFUN_VERSION_NUMBERS 1,0,0,0
+#endif
