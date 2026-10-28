@@ -36,7 +36,10 @@ int main(void) {
     game_start(&g);g.phase=PLAYING;g.next=1;g.launch_in=10;g.nets[0].y=FLOOR_Y;
     g.butterflies[0].state=GROUND;g.butterflies[0].x=g.nets[0].x;g.butterflies[0].y=FLOOR_Y;
     Input scoop={0};scoop.scoop[0]=1;game_step(&g,1.0f/120,&scoop);assert(g.nets[0].score==1&&g.butterflies[0].owner==0);valid(&g);
-    for(int i=0;i<30;i++)game_step(&g,1.0f/120,&scoop);assert(g.nets[0].score==1);
+    for(int i=0;i<30;i++) {
+        game_step(&g,1.0f/120,&scoop);
+    }
+    assert(g.nets[0].score==1);
     // A golden catch ends the golden rule immediately, regardless of other scores.
     game_start(&g);g.phase=PLAYING;g.rule=1;g.next=1;g.launch_in=10;
     g.butterflies[g.golden_index].golden=0;g.golden_index=0;g.butterflies[0].golden=1;
