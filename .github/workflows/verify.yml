@@ -10,6 +10,18 @@ concurrency:
   group: elefun-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  portable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Strict GCC simulation and recovery regression
+        run: |
+          mkdir -p build
+          gcc -std=c11 -O2 -Wall -Wextra -Wpedantic -Werror tests/test_game.c src/game.c -o build/test_game -lm
+          ./build/test_game
   windows:
     runs-on: windows-latest
     timeout-minutes: 15
@@ -49,7 +61,7 @@ jobs:
             ${{ runner.temp }}/elefun-consumer/reports/**/*.txt
           if-no-files-found: ignore
   publish:
-    needs: windows
+    needs: [portable, windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
