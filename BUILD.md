@@ -1,6 +1,6 @@
 # Build and test Elefun
 
-To play without compiling, download the Windows ZIP linked in [README.md](README.md#start-playing). These steps are for the matching v1.0.0 C source ZIP.
+To play without compiling, download the Windows ZIP linked in [README.md](README.md#start-playing). These steps are for the matching v1.0.1 C source ZIP.
 
 ## Requirements
 
@@ -10,17 +10,17 @@ Get `llvm-mingw-20260922-ucrt-x86_64.zip` from the [LLVM MinGW 20260922 release]
 
 ## Build from the extracted source
 
-Extract `elefun_1.0.0_source.zip`, open PowerShell, then run:
+Extract `elefun_1.0.1_source.zip`, open PowerShell, then run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\elefun-1.0.0\build.ps1" -Compiler "C:\path\to\llvm-mingw-20260922-ucrt-x86_64\bin\clang.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\path\to\elefun-1.0.1\build.ps1" -Compiler "C:\path\to\llvm-mingw-20260922-ucrt-x86_64\bin\clang.exe"
 ```
 
 Use your own extracted folder paths. The script finds its source folder itself, so the terminal can be in another directory. If the tested compiler is on PATH, you can omit `-Compiler`; an explicit compiler takes precedence over `CC`, then PATH checks Clang before GCC.
 
-The script builds in a new `build/check-...` folder, treats warnings as errors, runs simulation and native smoke checks, verifies file version 1.0.0, then promotes the checked executable to `build/Elefun.exe`. Close an already running source-built game before rebuilding. A compile or test failure keeps the previous successful build and leaves the failed check folder for diagnosis. Failed stages do not count as a successful new build.
+The script builds in a new `build/check-...` folder, treats warnings as errors, runs simulation and native smoke checks, verifies file version 1.0.1, then promotes the checked executable to `build/Elefun.exe`. Close an already running source-built game before rebuilding. A compile or test failure keeps the previous successful build and leaves the failed check folder for diagnosis. Failed stages do not count as a successful new build.
 
-Success prints the simulation PASS lines, native PASS line and `Built Elefun 1.0.0 at build/Elefun.exe. Run Play.cmd to play.` Open `Play.cmd` in the source folder. The `build/build.json` receipt records source input hashes and the resulting executable hash.
+Success prints the simulation PASS lines, native PASS line and `Built Elefun 1.0.1 at build/Elefun.exe. Run Play.cmd to play.` Open `Play.cmd` in the source folder. The `build/build.json` receipt records source input hashes and the resulting executable hash.
 
 ## Repeat the checks
 
@@ -63,7 +63,7 @@ Start-Process -FilePath $game -ArgumentList '--snapshot lobby.bmp lobby' -Window
 Start-Process -FilePath $game -ArgumentList '--snapshot playing.bmp playing' -WindowStyle Hidden -Wait
 ```
 
-The other phases are `paused` and `results`. These are seeded images from the real renderer, separate from naturally completed round images. `--version` prints `Elefun 1.0.0`; `--help` lists developer options. `--seed` accepts integers 1 through 4294967295. Unknown options, incompatible check modes and invalid seeds return a nonzero exit without opening a game. Snapshot output needs an existing writable folder.
+The other phases are `paused` and `results`. These are seeded images from the real renderer, separate from naturally completed round images. `--version` prints `Elefun 1.0.1`; `--help` lists developer options. `--seed` accepts integers 1 through 4294967295. Unknown options, incompatible check modes and invalid seeds return a nonzero exit without opening a game. Snapshot output needs an existing writable folder.
 
 ## If a build fails
 

@@ -5,4 +5,4 @@ if not exist "build\Elefun.exe" (
   pause
   exit /b 1
 )
-start "Elefun 1.0.0" "%~dp0build\Elefun.exe"
+start "Elefun 1.0.1" "%~dp0build\Elefun.exe"

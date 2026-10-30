@@ -2,21 +2,21 @@
 
 Catch 31 butterflies in a meadow with a friendly blue elephant. Play solo, race the computer, or share the same PC with a friend.
 
-Elefun 1.0.0 runs offline on **Windows 10 or 11 x64**. No account, installer, game engine or downloaded artwork is required.
+Elefun 1.0.1 runs offline on **Windows 10 or 11 x64**. No account, installer, game engine or downloaded artwork is required.
 
-**[Download the Windows game](https://github.com/agammann/elefun/releases/download/v1.0.0/elefun_1.0.0_windows-x64.zip)** · **[Release and checksums](https://github.com/agammann/elefun/releases/tag/v1.0.0)** · **[Matching C source](https://github.com/agammann/elefun/releases/download/v1.0.0/elefun_1.0.0_source.zip)**
+**[Download the Windows game](https://github.com/agammann/elefun/releases/download/v1.0.1/elefun_1.0.1_windows-x64.zip)** · **[Release and checksums](https://github.com/agammann/elefun/releases/tag/v1.0.1)** · **[Matching C source](https://github.com/agammann/elefun/releases/download/v1.0.1/elefun_1.0.1_source.zip)**
 
 ![Elefun lobby with a blue elephant, a green net, and game settings](preview.png)
 
 ## Start playing
 
-1. Download `elefun_1.0.0_windows-x64.zip` from the release above. The source ZIP is for developers.
-2. Right click the ZIP, choose **Extract All**, and open its `Elefun-1.0.0` folder. Keep the files together.
-3. Double click **Elefun.exe** or **Play.cmd**. The window title and executable file properties show version 1.0.0.
+1. Download `elefun_1.0.1_windows-x64.zip` from the release above. The source ZIP is for developers.
+2. Right click the ZIP, choose **Extract All**, and open its `Elefun-1.0.1` folder. Keep the files together.
+3. Double click **Elefun.exe** or **Play.cmd**. The window title and executable file properties show version 1.0.1.
 4. Start with **SOLO**, **Most butterflies**, and **Gentle**. Click **LET THEM FLY** or press **Enter**.
 5. After the three second countdown, move your net and scoop butterflies as they fall. Press **Enter** on the results screen to play again.
 
-To verify your download, get `SHA256SUMS` from the same release. In PowerShell, run `Get-FileHash .\elefun_1.0.0_windows-x64.zip -Algorithm SHA256` and compare the full hash with the Windows ZIP line in `SHA256SUMS` before extracting it. The release also includes an individual `.sha256` file for each ZIP.
+To verify your download, get `SHA256SUMS` from the same release. In PowerShell, run `Get-FileHash .\elefun_1.0.1_windows-x64.zip -Algorithm SHA256` and compare the full hash with the Windows ZIP line in `SHA256SUMS` before extracting it. The release also includes an individual `.sha256` file for each ZIP.
 
 This is a Windows desktop game. It does not run in GitHub or a browser. The executable is not a macOS, Linux, phone or Windows ARM build.
 

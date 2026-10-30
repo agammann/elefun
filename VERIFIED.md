@@ -1,5 +1,7 @@
 # Verification
 
+For v1.0.1, a local MinGW GCC 16.2.0 build with warnings treated as errors passed 360 simulated rounds and the hidden native window smoke check on October 30, 2026. This validates the source portability change; the release workflow separately checks the pinned Clang build and delivered ZIPs.
+
 Elefun 1.0.0 keeps the existing 31-butterfly simulation and artwork. Checks here distinguish simulation, native Windows execution, rendering, and physical hardware observation.
 
 The named local build uses Windows 11 x64 build 26300, Clang 23.1.2 / LLVM MinGW 20260922 UCRT x86_64, C11, optimization and compiler warnings as errors. Windows 10 x64 uses the same system API/UCRT target; a separate Windows 10 machine was not tested.
