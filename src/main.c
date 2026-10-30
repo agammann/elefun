@@ -275,7 +275,8 @@ static int snapshot(const char *path) {
     fh.bfType=0x4d42; fh.bfOffBits=sizeof(fh)+sizeof(ih); fh.bfSize=fh.bfOffBits+WIDTH*SCALE*HEIGHT*SCALE*4;
     ih.biSize=sizeof(ih); ih.biWidth=WIDTH*SCALE; ih.biHeight=-HEIGHT*SCALE; ih.biPlanes=1; ih.biBitCount=32; ih.biSizeImage=WIDTH*SCALE*HEIGHT*SCALE*4;
     int ok=fwrite(&fh,sizeof(fh),1,f)==1 && fwrite(&ih,sizeof(ih),1,f)==1 && fwrite(pixels,ih.biSizeImage,1,f)==1;
-    if(fclose(f)!=0) ok=0; return ok;
+    if(fclose(f)!=0) ok=0;
+    return ok;
 }
 static void put16(unsigned char *p,unsigned int n) { p[0]=(unsigned char)n; p[1]=(unsigned char)(n>>8); }
 static void put32(unsigned char *p,unsigned int n) { for(int i=0;i<4;i++) p[i]=(unsigned char)(n>>(8*i)); }
@@ -376,7 +377,8 @@ static int native_checks(HWND hwnd) {
     step_input(1.0f/120);CHECK(game.nets[0].x>590 && game.nets[0].x<=600 && fabsf(game.nets[0].y-500)<=1 && game.nets[0].swing>0);
     CHECK(test_presentation());
     DWORD handles=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
-    for(int i=0;i<60;i++)render();CHECK(handles==GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS));
+    for(int i=0;i<60;i++) render();
+    CHECK(handles==GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS));
     FILE *f=fopen("smoke-result.txt","w");if(f){fprintf(f,"%s: native window, countdown, pause, resume, focus loss, restart, mode/rule/breeze selection, mouse movement, mouse scoop, short keyboard scoops, both players movement, sound toggle, completed results preserved across next-round choices, letterboxed mouse controls, four presentation sizes, stable GDI resources.\n",ok?"PASS":"FAIL");fclose(f);}
     if(log)fclose(log);
 #undef CHECK
@@ -508,11 +510,14 @@ static LRESULT CALLBACK wndproc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp) {
     case WM_CAPTURECHANGED:mouse_down=0;return 0;
     case WM_TIMER:{
         LARGE_INTEGER now;QueryPerformanceCounter(&now);double dt=(double)(now.QuadPart-last_tick.QuadPart)/(double)frequency.QuadPart;last_tick=now;
-        if(dt>0.1)dt=0.1;accumulator+=dt;while(accumulator>=1.0/120.0){step_input(1.0f/120);accumulator-=1.0/120.0;}
+        if(dt>0.1)dt=0.1;
+        accumulator+=dt;
+        while(accumulator>=1.0/120.0){step_input(1.0f/120);accumulator-=1.0/120.0;}
         if(game.sound_events&&!muted){int k=(game.sound_events&4)?2:(game.sound_events&2)?1:0;if(PlaySoundA((LPCSTR)sounds[k],NULL,SND_MEMORY|SND_ASYNC|SND_NODEFAULT))audio_accepted++;else audio_failed++;}game.sound_events=0;
         InvalidateRect(hwnd,NULL,FALSE);
         if(smoke&&++smoke_ticks==12){int ok=native_checks(hwnd);DestroyWindow(hwnd);if(!ok)PostQuitMessage(1);}
-        if(acceptance)acceptance_step(hwnd);return 0;
+        if(acceptance)acceptance_step(hwnd);
+        return 0;
     }
     case WM_PAINT:{PAINTSTRUCT ps;HDC target=BeginPaint(hwnd,&ps);render();present_frame(target,client_w,client_h);EndPaint(hwnd,&ps);return 0;}
     case WM_CLOSE:DestroyWindow(hwnd);return 0;

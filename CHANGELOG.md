@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1
+
+- Make the documented MinGW GCC fallback build cleanly with warnings treated as errors. Gameplay and controls are unchanged.
+
 ## 1.0.0
 
 - Versioned offline Windows x64 game and matching C11 source packages with SHA256 checksums and source/commit manifests.
