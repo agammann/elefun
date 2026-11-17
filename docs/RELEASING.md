@@ -14,6 +14,8 @@ Builds and play need no Git. Release preparation uses a clean Git checkout plus 
 
 `release-artifacts/` contains exactly the source and Windows ZIPs, their individual checksum files and `SHA256SUMS`. Both ZIPs contain matching `RELEASE.json`: version, exact commit/tree, executable SHA256 and all source file Git blobs. Packaging refuses dirty source, changed build inputs, mismatched build/version, or existing artifacts. Use a new checkout for another package run. Source archive bytes are preserved even with `core.autocrlf=true`.
 
+Both archives carry the project MIT license, `THIRD_PARTY_NOTICES.md` and the three unchanged pinned toolchain notices in `third-party/`. The consumer checks every source Git blob and requires byte equality between both packages for these notice files.
+
 The Windows Actions job obtains the pinned compiler by checksum, builds and uses both deliverables, then uploads the checked five-file package set. On a successful **main push**, the publisher checks that main still equals the tested commit, checks the tag, uploads a draft release, verifies every asset digest and publishes last. Pull requests do not publish. An existing published version is left unchanged; use a new version for changed source.
 
 Published ZIPs are unsigned Windows applications. Keep source and executable identity together when reporting or investigating a problem.

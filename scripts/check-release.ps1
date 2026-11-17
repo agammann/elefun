@@ -45,7 +45,7 @@ foreach ($file in $metadata.sourceFiles) {
     if ($value -ne $file.blob) { throw "Source Git blob mismatch: $($file.path)." }
 }
 $game = Join-Path $windows 'Elefun.exe'
-foreach ($name in @('README.md', 'LICENSE', 'CHANGELOG.md', 'VERIFIED.md', 'preview.png', 'gameplay.png')) {
+foreach ($name in @('README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'third-party/LICENSE-llvm-mingw.txt', 'third-party/COPYING.MinGW-w64.txt', 'third-party/COPYING.MinGW-w64-runtime.txt', 'CHANGELOG.md', 'VERIFIED.md', 'preview.png', 'gameplay.png')) {
     if ((Get-FileHash -LiteralPath (Join-Path $windows $name) -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Join-Path $source $name) -Algorithm SHA256).Hash) { throw "Windows and source content differ: $name." }
 }
 $documentation = @(Get-ChildItem -LiteralPath (Join-Path $source 'docs') -File -Recurse)
