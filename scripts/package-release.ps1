@@ -36,8 +36,9 @@ $metadata = [ordered]@{ name = 'elefun'; version = $version; commit = $commit; t
 $json = ($metadata | ConvertTo-Json -Depth 5) + "`n"
 $utf8 = New-Object Text.UTF8Encoding($false)
 Copy-Item -LiteralPath $game -Destination (Join-Path $windowsRoot 'Elefun.exe')
-foreach ($name in @('README.md', 'LICENSE', 'CHANGELOG.md', 'VERIFIED.md', 'preview.png', 'gameplay.png')) { Copy-Item -LiteralPath $name -Destination $windowsRoot }
+foreach ($name in @('README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'VERIFIED.md', 'preview.png', 'gameplay.png')) { Copy-Item -LiteralPath $name -Destination $windowsRoot }
 Copy-Item -LiteralPath docs -Destination $windowsRoot -Recurse
+Copy-Item -LiteralPath third-party -Destination $windowsRoot -Recurse
 [IO.File]::WriteAllText((Join-Path $windowsRoot 'RELEASE.json'), $json, $utf8)
 $launcher = "@echo off`r`ncd /d ""%~dp0""`r`nif not exist ""Elefun.exe"" (`r`n  echo Elefun.exe is missing. Extract the complete Windows ZIP again.`r`n  pause`r`n  exit /b 1`r`n)`r`nstart ""Elefun $version"" ""%~dp0Elefun.exe""`r`n"
 [IO.File]::WriteAllText((Join-Path $windowsRoot 'Play.cmd'), $launcher, $utf8)

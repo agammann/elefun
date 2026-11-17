@@ -1,6 +1,20 @@
 # Verification
 
+## November 17, 2026 notice correction for 1.0.2
+
+The source and Windows packages for 1.0.1 contained the project's MIT license and omitted the pinned compiler runtime notices. Inspection of the actual linked executable found defined MinGW runtime symbols. The matching compiler driver also links MinGW startup objects, runtime libraries and LLVM builtins. The pinned MinGW runtime notice requires accompanying copyright, license conditions and disclaimers when distributing linked runtime code in binary form.
+
+Version 1.0.2 adds the three unchanged official toolchain notice texts to both archives and checks their exact bytes in the paired-package consumer. Gameplay code and authored assets are unchanged.
+
+Before this packaging correction, the existing 360-round simulation passed with Clang 23.1.2 on Windows and GCC 14.2.0 in an isolated Linux container without network access. Both runs recorded 9,589 catches and passed the focused accounting, state and recovery checks. The fresh Windows build then reached its native smoke launch and was blocked by the local Application Control policy. No policy or trust change was made and the staged executable was not promoted. Required native and package checks remain with the existing Windows CI workflow.
+
+The actual published 1.0.1 executable also completed an ordinary Solo round with all 31 butterflies caught. Pause, resume and mute controls worked. Choosing Two Players, Golden butterfly and Breezy preserved the completed result, and replay and restart reset both scores before returning to the lobby. Short synthetic player-two key taps did not establish visible movement in this check. That observation does not establish physical two-player input or audible sound.
+
+## Earlier 1.0.1 portability check
+
 For v1.0.1, a local MinGW GCC 16.2.0 build with warnings treated as errors passed 360 simulated rounds and the hidden native window smoke check on October 30, 2026. This validates the source portability change; the release workflow separately checks the pinned Clang build and delivered ZIPs.
+
+## Earlier 1.0.0 verification
 
 Elefun 1.0.0 keeps the existing 31-butterfly simulation and artwork. Checks here distinguish simulation, native Windows execution, rendering, and physical hardware observation.
 

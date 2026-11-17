@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2
+
+- Carry the pinned LLVM and MinGW-w64 redistribution notices in both source and Windows ZIPs, with exact-byte checks in the paired-package consumer.
+- Preserve gameplay, controls, original artwork and generated sounds. Align version metadata and current download/build instructions with the new package.
+
 ## 1.0.1
 
 - Make the documented MinGW GCC fallback build cleanly with warnings treated as errors. Gameplay and controls are unchanged.
